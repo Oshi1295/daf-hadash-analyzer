@@ -1,15 +1,14 @@
-
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import plotly.express as px
 import fitz
 import re
-from fpdf import FPDF
 from datetime import datetime
 
 st.set_page_config(page_title="רמזור דף חדש", layout="wide")
 
+# פתיח
 st.markdown("""
 <div dir="rtl" style="text-align: right">
 <h1>🚦 רמזור דף חדש</h1>
@@ -18,22 +17,25 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# שאלון
 with st.form("user_inputs"):
     st.subheader("📝 שאלון")
-    income = st.number_input("מה סך ההכנסה החודשית נטו (₪)?", min_value=0)
-    partner_income = st.number_input("מה סך ההכנסה של בן/בת הזוג (₪)?", min_value=0)
-    other_income = st.number_input("האם קיימות הכנסות נוספות? אם כן - כמה (₪)?", min_value=0)
-    expenses = st.number_input("מה סך ההוצאות החודשיות הקבועות (₪)?", min_value=0)
-    loan_repayment = st.number_input("מהו סך ההחזר החודשי של הלוואות קיימות (₪)?", min_value=0)
-    rent = st.number_input("מה סכום השכירות (₪)?", min_value=0)
+    income = st.number_input("הכנסה חודשית (₪)", min_value=0)
+    partner_income = st.number_input("הכנסת בן/בת זוג (₪)", min_value=0)
+    other_income = st.number_input("הכנסות נוספות (₪)", min_value=0)
+    expenses = st.number_input("הוצאות חודשיות קבועות (₪)", min_value=0)
+    loan_repayment = st.number_input("החזר הלוואות חודשי (₪)", min_value=0)
+    rent = st.number_input("שכירות חודשית (₪)", min_value=0)
     submitted = st.form_submit_button("נתח נתונים")
 
 if submitted:
     st.success("🟢 נתוני השאלון נקלטו בהצלחה!")
 
+# העלאת קבצים
 st.header("📤 העלאת קבצים")
-uploaded_files = st.file_uploader("העלה קבצי עו"ש ודוחות אשראי (PDF)", type=["pdf"], accept_multiple_files=True)
+uploaded_files = st.file_uploader('העלה קבצי עו"ש ודוחות אשראי (PDF)', type=["pdf"], accept_multiple_files=True)
 
+# פונקציית עיבוד קבצי PDF של עו"ש
 def parse_bank_pdf(file):
     doc = fitz.open(stream=file.read(), filetype="pdf")
     text = "\n".join(page.get_text() for page in doc)
@@ -50,24 +52,28 @@ def parse_bank_pdf(file):
             continue
     return pd.DataFrame(data)
 
+# ניתוח הקבצים
 if uploaded_files:
     dfs = []
     for file in uploaded_files:
         df = parse_bank_pdf(file)
         if not df.empty:
             dfs.append(df)
+
     if dfs:
         bank_df = pd.concat(dfs)
         bank_df["תאריך"] = pd.to_datetime(bank_df["תאריך"], dayfirst=True, errors="coerce")
 
+        # תיוג לפי תיאור
         def tag(desc):
             if "משכורת" in desc: return "הכנסה"
-            elif "הו"ק" in desc or "הלוואה" in desc: return "הלוואות"
+            elif "הו\"ק" in desc or "הלוואה" in desc: return "הלוואות"
             elif "אשראי" in desc or "כרטיס" in desc: return "אשראי"
             elif "עמלה" in desc: return "עמלות"
             elif "שכירות" in desc: return "שכירות"
             elif "ביטוח לאומי" in desc or "ילדים" in desc: return "קצבאות"
             else: return "אחר"
+
         bank_df["קטגוריה"] = bank_df["תיאור"].apply(tag)
 
         income_df = bank_df[bank_df["signed_amount"] > 0]
@@ -84,4 +90,6 @@ if uploaded_files:
         st.subheader("🧾 סיכום")
         st.write(f"**תזרים חודשי נטו:** ₪{net:,.0f}")
     else:
-        st.warning("לא זוהו נתונים תקינים.")
+        st.warning("⚠️ לא זוהו נתונים תקינים.")
+else:
+    st.info("📁 נא להעלות קובצי PDF של עו\"ש ואשראי")
